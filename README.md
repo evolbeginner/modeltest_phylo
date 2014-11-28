@@ -19,7 +19,6 @@
 	consel (for topology comparison, http://www.is.titech.ac.jp/~shimo/prog/consel/)
 	create_topo_file.pl (supposed to be found in the directory "additional_tools")
 
-#####################################################################
 3.	For phyml users, it is needed to convert the file format before phyml is run.
 	So you need to have a file named "$input.phy" under the outdir (output directory).
 	e.g., if your alignment file's name is "test.fasta", the name of the phylip format file should be "test.fasta.phy". This could be done by adding something in the script which is very easy. Otherwise, I recommend to use the script "MFAtoPHY.pl" to help you do it (see section 5 for more details).
@@ -37,7 +36,6 @@
 	3)	Indicate its full path in the CONFIGURATION part of the script
 	The script is able to choose a proper way itself.
 
-#####################################################################
 6.	There will be something wrong if the following argument is given
 		"--mode raxml --type DNA"
 	This is because the model for DNA substitution is too few. So if you want to do analysis for DNA sequences, please use "--mode phyml --type DNA"
@@ -46,21 +44,18 @@
 
 8.	Topology comparison based on topology constraints can be performed if "--topo_input" is specified. A file containing at least 2 topologies should be included in this file. Detailed information of how to prepare for this file can be got by typing "perldoc create_topo_file.pl".
 
-#####################################################################
 9.	The original commands for
 		modeltest
 		phylogenetic construction
 		the result of the best model
 	will be shown in the file *.cmd_out in the result folder
 
-#####################################################################
 10.	If you are going to analyze many alignemnts, you can put them in the same folder. Then run the following command (this is a very simple way without choosing any optional arguments) to have a test
 		for i in PATH_TO_THE_FOLDER/*; do
 			[ ! -f $i ] && continue;
 			PATH_TO_SCRIPT/modeltest_phylo_DNA2.sh --input $i --mode raxml --type prot;
 		done
 
-#####################################################################
 11.	If you have any questions, suggestions about new functions or want to report bugs, please send e-mail to
 	"sishuowang@hotmail.ca" or "tomassonwss@gmail.com"
 	Your help will be highly appreciated.
