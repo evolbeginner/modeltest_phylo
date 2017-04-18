@@ -18,14 +18,15 @@ para_compulsory=(input mode type)
 ###					CONFIGURATION					###
 ###	Please indicate the paths or the executable files of the following tools here	###
 ########-----------------------------------------------------------------------------######
-jmodeltest="/home/sswang/software/phylo/jmodeltest-2.1.2/jModelTest.jar"
-prottest="/home/sswang/software/phylo/prottest-3.2-20130103/prottest-3.2.jar"
-raxmlHPC_multi="raxmlHPC-PTHREADS"
-raxmlHPC="raxmlHPC"
+jmodeltest=~/software/phylo/jmodeltest-2.1.2/jModelTest.jar
+prottest=~/software/phylo/prottest-3.2-20130103/prottest-3.2.jar
+raxmlHPC_multi=~/software/phylo/RAxML_8.2.4/raxmlHPC-PTHREADS
+#raxmlHPC_multi=~/software/phylo/RAxML_8.2.4/raxmlHPC-PTHREADS
+raxmlHPC=~/software/phylo/RAxML_8.2.4/raxmlHPC
+#raxmlHPC=~/software/phylo/RAxML_8.0.3/raxmlHPC
 MFAtoPHY_path=""
-consel_dir="/home/sswang/software/phylo/consel/src" # ignore this if consel is not going to be run
+consel_dir=~/software/phylo/consel/src # ignore this if consel is not going to be run
 create_topo_file_perl="" # ignore this if the folder named "additional_tools" has already existed or you are not going to make comparisons of different topology constraints
-
 
 
 ########################################################################
@@ -45,6 +46,9 @@ EOF
 				default: . (the current working directory)
 	--modeltest_method	AIC or BIC (Only one of them could be specified once.)
 				default: AIC
+	--model			the only model that you want to use
+				If specified, no model test will be performed.
+	-b|--botstrap		bootstrap
 	--test_model		the model(s) you are going to test
 				default: all
 				it should be given in the following format and no space is allowable
@@ -73,6 +77,7 @@ EOF
 					taxa4 taxa5
 				     In the alignment, if only taxa1, taxa3 and taxa4 are all included, the script will continue to be run. However, if only taxa1, taxa2 and taxa3 are in the alignment, the script will be stopped.
 	--create_topo_file_perl	the perl script used to create topology file based upon the sequences in the sequence file
+	--force			remove outdir
 	--clean			cover the old results of RAxML if the output names are same
 					e.g. RAxML_info.test.fasta
 				default: off (The script will not clean the old results of RAxML automatically)
@@ -101,8 +106,12 @@ while [ $# -gt 0 ]; do
 			type="$2"
 			shift
 			;;
-		--bootstrap)
+		-b|--bootstrap)
 			bootstrap="$2"
+			shift
+			;;
+		--model)
+			model="$2"
 			shift
 			;;
 		--test_model)
@@ -150,6 +159,9 @@ while [ $# -gt 0 ]; do
 		--clean)
 			clean=1
 			;;
+		--force)
+			is_force=1
+			;;
 		-h|--h|--help)
 			show_help
 			;;
@@ -165,7 +177,7 @@ done
 
 check_param(){
 	local i
-	[ -z $type ] 		&&	type='prot'
+	[ -z $type ] && type='prot'
 
 	for i in ${para_compulsory[@]}; do
 		local p
@@ -173,7 +185,7 @@ check_param(){
 		if [ -z $p ]; then
 			echo -n "Arg "
 			printf "\E[0;35;10m"; echo -n "$i"; printf "\E[0;0;0m"
-			echo " has not been defined. Existing ......"
+			echo " has not been defined. Exiting ......"
 			exit 1
 		fi
 	done
@@ -181,9 +193,8 @@ check_param(){
 	case "$type" in
 		DNA)
 			modeltest_tool_HOME=`dirname $jmodeltest`
-			if [ $mode == raxml ]; then
-				echo -n "Phylogenetic method has to be phyml"
-				echo -e "if you are analyzing DNA data.\nExisting ......\n"
+			if [ $mode == raxml -a -z $model ]; then
+				echo -e "Phylogenetic method has to be phyml if you are analyzing DNA data and if model is not specified.\nExiting ......"
 				exit 1
 			fi
 		;;
@@ -193,6 +204,7 @@ check_param(){
 	esac
 
 	[ -z $outdir ]		&&	outdir='.'
+	[ ! -z $is_force ]	&&	rm -rf $outdir
 	[ -z $modeltest_method ]&&	modeltest_method='AIC'
 	[ -z $cpu_modeltest ]	&&	cpu_modeltest=2
 	[ -z $cpu_phylo ]	&&	cpu_phylo=1
@@ -279,30 +291,35 @@ get_best_model(){
 	local i
 	case $type in
 		DNA)
-			if ! grep '::Best Models::' $modeltest_out; then
-				echo "There is something wrong in jModelTest. Existing ......" && exit 1
+			if [ -z $model ]; then
+				if ! grep '::Best Models::' $modeltest_out; then
+					echo "There is something wrong in jModelTest. Exiting ......" && exit 1
+				fi
+				read -a jmodeltest_result <<< `tail -1 $modeltest_out`
+				best_model=${jmodeltest_result[1]}
+				case $best_model in
+					SYM*)
+						best_model=`sed 's/^SYM/GTR/'   <<< "$best_model"` ;;
+					HKY*)
+						best_model=`sed 's/^HKY/HKY85/' <<< "$best_model"` ;;
+				esac
+				#for i in ${jmodeltest_result[@]:3:3}; do
+				#	[ $i != ${jmodeltest_result[2]} ] && best_model=${best_model}"+F" && break
+				#done
+			else
+				best_model=$model
 			fi
-			read -a jmodeltest_result <<< `tail -1 $modeltest_out`
-			best_model=${jmodeltest_result[1]}
-			case $best_model in
-				SYM*)
-					best_model=`sed 's/^SYM/GTR/'   <<< "$best_model"` ;;
-				HKY*)
-					best_model=`sed 's/^HKY/HKY85/' <<< "$best_model"` ;;
-			esac
-			for i in ${jmodeltest_result[@]:3:3}; do
-				[ $i != ${jmodeltest_result[2]} ] && best_model=${best_model}"+F" && break
-			done
-			echo "!!$best_model!!"
+			echo -e "The best model is:\t$best_model"
 		;;
 		prot)
 			best_model=`grep -o "^Best model according to $modeltest_method: .\+" $modeltest_out`
 			best_model=`grep -o "[^ ]\+$" <<< $best_model`
-			echo $best_model
+			echo -e "The best model is:\t$best_model"
 		;;
 	esac
 	echo "$best_model" >> $cmd_out
-	OLDIFS="$IFS";	IFS='+'
+	OLDIFS="$IFS";
+	IFS='+'
 	read -a model <<< "$best_model"
 	IFS="$OLDIFS"
 }
@@ -312,9 +329,9 @@ prepare_phylo(){
 	local MFAtoPHY_cmd
 	[ -f "$phylo_additional" ] && phylo_additional=`grep '[^ ]' "$phylo_additional"`
 	if [ $input_format == 'fasta' ]; then
-		if which MFAtoPHY.pl > /dev/null; then
-			MFAtoPHY_cmd="MFAtoPHY.pl"
-		elif [ ! -z MFAtoPHY_path ]; then
+		#if which MFAtoPHY.pl > /dev/null; then
+		#	MFAtoPHY_cmd="MFAtoPHY.pl"
+		if [ ! -z MFAtoPHY_path ]; then
 			MFAtoPHY_cmd="perl $MFAtoPHY_path/MFAtoPHY.pl"
 		else
 			MFAtoPHY_cmd="perl MFAtoPHY.pl"
@@ -322,7 +339,7 @@ prepare_phylo(){
 
 		case $mode in
 			phyml)
-				MFAtoPHY_cmd $input_new
+				$MFAtoPHY_cmd $input_new
 				input_phy=${input_new}.phy
 				;;
 			raxml)
@@ -380,7 +397,13 @@ run_phylo(){
 				esac
 			done
 			echo ${FGI[@]}
-			cmd="phyml -i $input_phy $cmd_type -m $evol_model -c 4 -b $bootstrap $F $G $I $phylo_additional"
+			bootstrap_arg=""
+			if [ ! -z $bootstrap ]; then
+				bootstrap_arg="-b $bootstrap"
+			else
+				bootstrap_arg=""
+			fi
+			cmd="phyml -i $input_phy $cmd_type -m $evol_model -c 4 $bootstrap_arg $F $G $I $phylo_additional"
 			echo "$cmd" >> $cmd_out
 			$cmd
 		;;
@@ -402,7 +425,15 @@ run_phylo(){
 					I)	I='I'		;;
 				esac
 			done
-			evol_model="PROT$G$I""$evol_model""$F"
+
+			case $type in
+				prot)
+					evol_model="PROT$G$I""$evol_model""$F"
+					;;
+				DNA)
+					evol_model="$evol_model""$G""$I"
+					;;
+			esac
 
 			if [ $cpu_phylo -eq 1 ];
 				then raxml_tool=$raxmlHPC
@@ -488,7 +519,11 @@ check_param
 
 prepare_modeltest
 
-run_modeltest
+if [ ! -z $model ]; then
+	echo $model >> $cmd_out
+else
+	run_modeltest
+fi
 
 get_best_model
 
@@ -497,4 +532,5 @@ prepare_phylo
 run_phylo
 
 [ ! -z $topo ] && [ ! -z $topo_compare ] && run_consel $outdir_new
+
 
