@@ -57,6 +57,6 @@
 		done
 
 11.	If you have any questions, suggestions about new functions or want to report bugs, please send e-mail to
-	"sishuowang@hotmail.ca" or "tomassonwss@gmail.com"
+	"sishuowang@hotmail.ca" 
 	Your help will be highly appreciated.
 
